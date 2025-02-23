@@ -2,20 +2,15 @@ library(tidyverse)
 library(jsonlite)
 library(shiny)
 
+#took out only json files
 Essentias <- "EssentiaOutput"
 names.of.files <- list.files(Essentias)
-
 json.files <- names.of.files |>
   str_subset(".json")
 
-cleaned.songs <- data.frame(artist = character(), album =character(), track=character(),
-                            overall.loudness = numeric(), spectral.energy= numeric(), 
-                            dissonance= numeric(), pitch.salience = numeric(),
-                            bpm = numeric(), beats.loudness = numeric(), 
-                            danceability = numeric(), tuning.frequency = numeric())
-
-for(i in 1:length(json.files)){
-  current.filename <- json.files[i]
+#recoded the loop into a function to enable tidyverse usage of map_dfr
+process.songs <- function(current.filename) {
+  #isolate naming parts 
   parts.of.name <- str_split(current.filename, "-", simplify = T)
   artist1 <- parts.of.name[1]
   album1 <- parts.of.name[2]
@@ -24,7 +19,8 @@ for(i in 1:length(json.files)){
   #loading in the json file and extracting each item 
   object <- fromJSON(paste0(Essentias, "/",current.filename))
   
-  new.data <- tibble(
+  # create a tibble with all the necessary pieces
+  tibble(
     artist = artist1,
     album = album1,
     track = track1,
@@ -37,74 +33,59 @@ for(i in 1:length(json.files)){
     danceability = object$rhythm$danceability,
     tuning.frequency = object$tonal$tuning_frequency
   )
-  
-  cleaned.songs <- rbind(cleaned.songs, new.data)
 }
+
+cleaned.songs <- json.files %>%
+  map_dfr(process.songs)
 
 
 #reading the Essentia spreadsheet and creating new average value columns
 csv.Essentia <- read_csv("./EssentiaOutput/EssentiaModelOutput.csv")
-csv.Essentia$valence <- rowMeans(csv.Essentia[,c("deam_valence",
-                                                 "emo_valence", 
-                                                 "muse_valence")])
 
-csv.Essentia$arousal <- rowMeans(csv.Essentia[,c("deam_arousal",
-                                                 "emo_arousal", 
-                                                 "muse_arousal")])
+cleaned.csv.Essentia <- csv.Essentia %>% 
+  rename("timbreBright" = "eff_timbre_bright") %>% 
+  mutate(
+    valence = rowMeans(select(., deam_valence, emo_valence, muse_valence), na.rm = TRUE),
+    arousal = rowMeans(select(., deam_arousal, emo_arousal, muse_arousal), na.rm = TRUE),
+    aggressive = rowMeans(select(., nn_aggressive, eff_aggressive), na.rm = TRUE),
+    happy = rowMeans(select(., nn_happy, eff_happy), na.rm = TRUE),
+    party = rowMeans(select(., nn_party, eff_party), na.rm = TRUE),
+    relax = rowMeans(select(., nn_relax, eff_relax), na.rm = TRUE),
+    sad = rowMeans(select(., nn_sad, eff_sad), na.rm = TRUE),
+    acoustic = rowMeans(select(., nn_acoustic, eff_acoustic), na.rm = TRUE),
+    electronic = rowMeans(select(., nn_electronic, eff_electronic), na.rm = TRUE),
+    instrumental = rowMeans(select(., nn_instrumental, eff_instrumental), na.rm = TRUE)
+  ) %>% 
+  select(artist, album, track, track, valence, timbreBright, instrumental, electronic,
+         acoustic, sad, relax, party, happy, aggressive, arousal)
+  # should this be dplyr::select or not?
 
-csv.Essentia$aggressive <- rowMeans(csv.Essentia[,c("nn_aggressive",
-                                                    "eff_aggressive")])
-
-csv.Essentia$happy <- rowMeans(csv.Essentia[,c("nn_happy",
-                                               "eff_happy")])
-
-csv.Essentia$party <- rowMeans(csv.Essentia[,c("nn_party",
-                                               "eff_party")])
-
-csv.Essentia$relax <- rowMeans(csv.Essentia[,c("nn_relax",
-                                               "eff_relax")])
-
-csv.Essentia$sad <- rowMeans(csv.Essentia[,c("nn_sad",
-                                             "eff_sad")])
-
-csv.Essentia$acoustic <- rowMeans(csv.Essentia[,c("nn_acoustic",
-                                                  "eff_acoustic")])
-
-csv.Essentia$electronic <- rowMeans(csv.Essentia[,c("nn_electronic",
-                                                    "eff_electronic")])
-
-csv.Essentia$instrumental <- rowMeans(csv.Essentia[,c("nn_instrumental",
-                                                      "eff_instrumental")])
-
-col.number <- which(colnames(csv.Essentia) == "eff_timbre_bright")
-colnames(csv.Essentia)[col.number] <- "timbreBright"
-csv.Essentia <- csv.Essentia[,c("artist", "album", "track","timbreBright", "instrumental", "electronic", 
-                                "acoustic", "sad", "relax", "party", "happy",
-                                "aggressive", "arousal", "valence")]
 
 csv.LIWC <- read.csv("LIWCOutput/LIWCOutput.csv")
 
-# PROF: WHY IS THIS NAMED berkshire.*? THIS DOES NOT
-#       SEEM TO BE MEANINGFUL TO THE PROBLEM/SOLUTION
 #Merging all three files together and renaming function column
-berkshire.half <- merge(csv.LIWC, csv.Essentia, all.y = TRUE)
-berkshire.hathaway <- merge(berkshire.half,cleaned.songs)
-colnames(berkshire.hathaway)[colnames(berkshire.hathaway) == "function."] <- "func"
+data.frame.list <- list(csv.LIWC,cleaned.songs,cleaned.csv.Essentia)
+complied.data <- data.frame.list %>% 
+  reduce(full_join)
+complied.data <- complied.data %>%
+  rename("func" = "function.")
 
 
 #final step of Part 2, creating new csv files
-training.csv <- berkshire.hathaway[which(!berkshire.hathaway$track == "Allentown"),]
-testing.csv <- berkshire.hathaway[which(berkshire.hathaway$track == "Allentown"),]
-write.csv(training.csv, file = "training.csv")
-write.csv(testing.csv, file = "testing.csv")
+training.csv <- complied.data %>% 
+  filter(track != "Allentown")
+testing.csv <- complied.data %>% 
+  filter(track == "Allentown")
+write_csv(training.csv, file = "training.csv")
+write_csv(testing.csv, file = "testing.csv")
+# This method works too -- future ref
+# training.csv <- filter(complied.data, track != "Allentown")
+# testing.csv <- filter(complied.data, track == "Allentown")
+
 
 #box plots for seeing where this 
-# PROF: YOU DON'T HAVE tidyverse LOADED SO THIS WON'T WORK
-#       ALSO, THIS SHOULD BE training.csv (SEE LINE 94)
-trainingdata.csv <- read_csv("trainingdata.csv")
-# PROF: YOU DON'T HAVE tidyverse LOADED SO THIS WON'T WORK
-#       ALSO, THIS SHOULD BE testing.csv (SEE LINE 95)
-testingdata.csv <- read_csv("testingdata.csv")
+trainingdata.csv <- read_csv("training.csv")
+testingdata.csv <- read_csv("testing.csv")
 Front.Bottoms <- trainingdata.csv[trainingdata.csv$artist == "The Front Bottoms",]
 Manchester.Orchestra <- trainingdata.csv[trainingdata.csv$artist == "Manchester Orchestra",]
 All.Get.Out <- trainingdata.csv[trainingdata.csv$artist == "All Get Out",]
