@@ -86,21 +86,46 @@ write_csv(testing.csv, file = "testing.csv")
 #box plots for seeing where this 
 trainingdata.csv <- read_csv("training.csv")
 testingdata.csv <- read_csv("testing.csv")
-Front.Bottoms <- trainingdata.csv[trainingdata.csv$artist == "The Front Bottoms",]
-Manchester.Orchestra <- trainingdata.csv[trainingdata.csv$artist == "Manchester Orchestra",]
-All.Get.Out <- trainingdata.csv[trainingdata.csv$artist == "All Get Out",]
 
-boxplot(Front.Bottoms$Tone, Manchester.Orchestra$Tone, All.Get.Out$Tone, testingdata.csv$Tone,
-        main = "Figure 1: Tone sound analysis",
-        names = c("TFB", "MO", "AGO", "Allen"),
-        col = c("maroon"),
-        horizontal = TRUE
+# group together the data by artists
+Front.Bottoms <- filter(trainingdata.csv, artist == "The Front Bottoms")
+Manchester.Orchestra <- filter(trainingdata.csv, artist == "Manchester Orchestra")
+All.Get.Out <- filter(trainingdata.csv, artist == "All Get Out")
+
+combined_data <- bind_rows(
+  All.Get.Out %>% 
+    filter(artist == "All Get Out") %>%
+    mutate(Artist = "AGO"),
+  Manchester.Orchestra %>% 
+    filter(artist == "Manchester Orchestra") %>% 
+    mutate(Artist = "MO"),
+  Front.Bottoms %>% 
+    filter(artist == "The Front Bottoms") %>%
+    mutate(Artist = "TFB"),
+  testingdata.csv %>% mutate(Artist = "Allen")
 )
 
-boxplot(Front.Bottoms$emotion, Manchester.Orchestra$emotion, All.Get.Out$emotion,testingdata.csv$emotion,
-        main = "Figure 2: emotion analysis",
-        names = c("TFB", "MO", "AGO", "Allen"),
-        col = "lightblue",
-        horizontal = TRUE
-)
+# Create the ggplot boxplot
+ggplot(combined_data, aes(x = Tone, y = Artist, fill = Artist)) +
+  geom_boxplot() +
+  geom_vline(xintercept = allentown$Tone) + 
+  labs(
+    title = "Figure 1: Emotional Tone sound analysis",
+    x = "Tone",
+    y = "Artist"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+ggplot(combined_data, aes(x = emotion, y = Artist, fill = Artist)) +
+  geom_boxplot() +
+  geom_vline(xintercept = allentown$emotion) + 
+  labs(
+    title = "Figure 2: Emotion analysis",
+    x = "Emotion",
+    y = "Artist"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
 
