@@ -1,6 +1,5 @@
 library(tidyverse)
 library(jsonlite)
-library(shiny)
 
 #took out only json files
 Essentias <- "EssentiaOutput"
@@ -86,40 +85,36 @@ write_csv(testing.csv, file = "testing.csv")
 #box plots for seeing where this 
 trainingdata.csv <- read_csv("training.csv")
 testingdata.csv <- read_csv("testing.csv")
+allentown <- filter(testingdata.csv, album == "Allentown")
 
 # group together the data by artists
-Front.Bottoms <- filter(trainingdata.csv, artist == "The Front Bottoms")
-Manchester.Orchestra <- filter(trainingdata.csv, artist == "Manchester Orchestra")
-All.Get.Out <- filter(trainingdata.csv, artist == "All Get Out")
-
 combined_data <- bind_rows(
-  All.Get.Out %>% 
-    filter(artist == "All Get Out") %>%
-    mutate(Artist = "AGO"),
-  Manchester.Orchestra %>% 
-    filter(artist == "Manchester Orchestra") %>% 
+  All.Get.Out <-
+    filter(trainingdata.csv, artist == "All Get Out") %>% mutate(Artist = "AGO"),
+  Manchester.Orchestra <-
+    filter(trainingdata.csv,artist == "Manchester Orchestra") %>% 
     mutate(Artist = "MO"),
-  Front.Bottoms %>% 
-    filter(artist == "The Front Bottoms") %>%
+  Front.Bottoms <-
+    filter(trainingdata.csv,artist == "The Front Bottoms") %>%
     mutate(Artist = "TFB"),
-  testingdata.csv %>% mutate(Artist = "Allen")
+  allentown %>% mutate(Artist = "Allen")
 )
 
-# Create the ggplot boxplot
+# Create the ggplot boxplots
 ggplot(combined_data, aes(x = Tone, y = Artist, fill = Artist)) +
   geom_boxplot() +
-  geom_vline(xintercept = allentown$Tone) + 
+  geom_vline(xintercept = allentown$Tone, size =1, linetype = "dashed", color = "maroon") + 
   labs(
     title = "Figure 1: Emotional Tone sound analysis",
     x = "Tone",
     y = "Artist"
   ) +
-  theme_minimal() +
+  theme_bw() +
   theme(legend.position = "none")
 
 ggplot(combined_data, aes(x = emotion, y = Artist, fill = Artist)) +
   geom_boxplot() +
-  geom_vline(xintercept = allentown$emotion) + 
+  geom_vline(xintercept = allentown$emotion, size =1, linetype = "dashed") + 
   labs(
     title = "Figure 2: Emotion analysis",
     x = "Emotion",
